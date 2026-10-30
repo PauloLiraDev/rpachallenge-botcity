@@ -14,6 +14,7 @@ as 10 rodadas. Os campos mudam de lugar a cada rodada; o robô localiza cada um 
 | `src/pages/challenge_page.py` | Page Object (seletores e cliques) |
 | `src/services/` | Download, leitura da planilha e leitura do resultado (sem driver) |
 | `src/domain/models.py` | `Person` e `ChallengeResult` (Pydantic) |
+| `src/execution_log.py` | Log de execução no Maestro: uma linha por Task com os números do desafio |
 | `src/browser.py` | `WebBot` Chrome com as opções da BotCity + ajustes para contêiner |
 | `scripts/build_zip.py` | Regenera `requirements.txt` (uv export, sem dev) e gera `dist/rpachallenge.zip` |
 | `scripts/deploy.py` | Publica bot, Runner e Automação no Maestro (idempotente) |
@@ -29,6 +30,7 @@ Ordem de precedência: parâmetro da Task no Maestro > variável `RPA_*` > padr�
 | `minimum_success_rate` | `100` | Abaixo disso a Task termina como FAILED |
 | `element_timeout_ms` | `10000` | Espera por elemento |
 | `base_url` / `excel_url` | rpachallenge.com | |
+| `execution_log` | `rpachallenge-execucoes` | Nome do Log de execução no Maestro |
 
 ## Rodar localmente
 
@@ -68,6 +70,14 @@ docker compose up -d runner           # Runner "rpachallenge-docker" ouvindo o M
 
 Com o Runner ativo, crie uma Task da Automação **rpachallenge** no Maestro (ou
 `scripts/deploy.py --task`). Chrome no contêiner precisa de `shm_size: 1gb` (já no compose).
+
+## Log de execução
+
+Cada Task grava uma linha no Log `rpachallenge-execucoes` (Maestro > Logs): Task, Status
+(SUCESSO/FALHA), Acerto (%), Campos certos, Rodadas, Tempo no site (ms), Duração total (s), Erro e
+Mensagem. O robô cria o Log na primeira gravação, com as colunas visíveis (o `Column` do SDK não
+envia `visible` e o Maestro as criaria ocultas). Erro ao gravar não derruba a Task. O nome do Log
+vem do parâmetro `execution_log`.
 
 ## Notas
 

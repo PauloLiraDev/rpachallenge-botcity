@@ -19,6 +19,7 @@ class Settings(BaseModel):
     element_timeout_ms: int = Field(default=10_000, gt=0)
     output_dir: Path = Path("output")
     chromedriver_path: str | None = None
+    execution_log: str = "rpachallenge-execucoes"
 
     @classmethod
     def load(cls, task_parameters: Mapping[str, object] | None = None) -> "Settings":

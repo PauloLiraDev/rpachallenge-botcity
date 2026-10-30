@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 from pathlib import Path
 
 from botcity.maestro import AlertType, AutomationTaskFinishStatus, BotMaestroSDK
@@ -9,6 +10,7 @@ from botcity.web import WebBot
 
 from src.config import Settings
 from src.domain.models import ChallengeResult, Person
+from src.execution_log import ExecutionLog
 from src.pages.challenge_page import ChallengePage
 from src.services.downloader import download_spreadsheet
 from src.services.result import ensure_minimum, parse_result
@@ -29,6 +31,9 @@ class RpaChallengeProcess:
         self.task_id = maestro.task_id
         self.output_dir = Path(settings.output_dir)
         self.page = ChallengePage(bot, settings.element_timeout_ms)
+        self.execution_log = ExecutionLog(maestro, self.task_id, settings.execution_log)
+        self.started = time.monotonic()
+        self.result: ChallengeResult | None = None
         self.people: list[Person] = []
         self.submitted = 0
 
@@ -42,11 +47,13 @@ class RpaChallengeProcess:
         for round_number, person in enumerate(self.people, start=1):
             self._submit_round(round_number, person)
         result = with_retry(lambda: parse_result(self.page.result_message()), attempts=2)
+        self.result = result
         self._publish(result)
         ensure_minimum(result, self.settings.minimum_success_rate)
         return result
 
     def finish_success(self, result: ChallengeResult) -> None:
+        self.execution_log.write(rounds=self._rounds(), duration_s=self._elapsed(), result=result)
         self.maestro.finish_task(
             task_id=self.task_id,
             status=AutomationTaskFinishStatus.SUCCESS,
@@ -57,6 +64,9 @@ class RpaChallengeProcess:
         )
 
     def finish_failure(self, error: Exception) -> None:
+        self.execution_log.write(
+            rounds=self._rounds(), duration_s=self._elapsed(), result=self.result, error=error
+        )
         screenshot = self._screenshot("erro.png")
         self.maestro.error(task_id=self.task_id, exception=error, screenshot=screenshot)
         self.maestro.alert(
@@ -91,6 +101,12 @@ class RpaChallengeProcess:
         # Dados da planilha são fictícios (vêm do próprio desafio): o print não tem PII real.
         if screenshot := self._screenshot("resultado.png"):
             self.maestro.post_artifact(self.task_id, "resultado.png", screenshot)
+
+    def _rounds(self) -> str:
+        return f"{self.submitted}/{len(self.people)}"
+
+    def _elapsed(self) -> float:
+        return time.monotonic() - self.started
 
     def _screenshot(self, name: str) -> str | None:
         if self.bot.driver is None:
