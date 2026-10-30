@@ -1,0 +1,41 @@
+# Variáveis em .env (copie de .env.example). Chrome precisa de shm >= 1g.
+x-botcity-env: &botcity-env
+  SERVER: ${SERVER:-developers}
+  LOGIN: ${LOGIN}
+  KEY: ${KEY}
+  WORKSPACE: ${WORKSPACE}
+
+services:
+  # BotCity Runner: fica ouvindo o Maestro e executa as Tasks do rpachallenge.
+  runner:
+    build: { context: ., target: runner }
+    image: rpachallenge-botcity-runner:latest
+    command: BotRunner
+    environment:
+      <<: *botcity-env
+      MACHINE_ID: ${MACHINE_ID:-rpachallenge-docker}
+    shm_size: "1gb"
+    restart: unless-stopped
+    platform: linux/amd64
+
+  # Publica dist/rpachallenge.zip + Runner + Automação no Maestro (a imagem 3.6 não traz o BotCLI).
+  deploy:
+    image: rpachallenge-botcity-local:latest
+    profiles: ["tools"]
+    entrypoint: ["/opt/venv/bin/python", "scripts/deploy.py"]
+    environment:
+      <<: *botcity-env
+      MACHINE_ID: ${MACHINE_ID:-rpachallenge-docker}
+      BOT_ID: ${BOT_ID:-rpachallenge}
+      BOT_VERSION: ${BOT_VERSION:-1.0.0}
+    volumes: ["./dist:/app/dist:ro", "./scripts:/app/scripts:ro"]
+    platform: linux/amd64
+
+  # Roda o bot direto no contêiner, sem Maestro.
+  local:
+    build: { context: ., target: local }
+    image: rpachallenge-botcity-local:latest
+    profiles: ["tools"]
+    shm_size: "1gb"
+    volumes: ["./output:/app/output"]
+    platform: linux/amd64
